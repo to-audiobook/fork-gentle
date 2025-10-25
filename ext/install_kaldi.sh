@@ -13,7 +13,7 @@ make clean
 make -j"$jobs"
 cd ../src
 # make clean (sometimes helpful after upgrading upstream?)
-./configure --shared --debug-level=0 --use-cuda=yes --cudatk-dir=/usr/local/cuda
+./configure --static --debug-level=0 --use-cuda=yes --cudatk-dir=/usr/local/cuda
 make clean
 make -j"$jobs" depend
 make -j"$jobs" online2 nnet3 nnet2 decoder feat hmm matrix util
