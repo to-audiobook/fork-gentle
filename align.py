@@ -1,4 +1,5 @@
 import argparse
+import json;
 import logging
 import multiprocessing
 import os
@@ -31,6 +32,9 @@ parser.add_argument(
 parser.add_argument(
         'txtfile', type=str,
         help='transcript text file')
+parser.add_argument(
+        '--minimal-output', action='store_true',
+        help='output only the word and its start and end markers');
 args = parser.parse_args()
 
 log_level = args.log.upper()
@@ -54,7 +58,24 @@ with gentle.resampled(args.audiofile) as wavfile:
     aligner = gentle.ForcedAligner(resources, transcript, nthreads=args.nthreads, disfluency=args.disfluency, conservative=args.conservative, disfluencies=disfluencies)
     result = aligner.transcribe(wavfile, progress_cb=on_progress, logging=logging)
 
-fh = open(args.output, 'w', encoding="utf-8") if args.output else sys.stdout
-fh.write(result.to_json(indent=2))
-if args.output:
+if(args.minimal_output):
+    mr = [];
+    for r in result.words:
+        mr.append({
+            "word:": r.word,
+            "start": r.start,
+            "end": r.end,
+        });
+    resultJson = json.dumps(mr, indent=4, ensure_ascii=False)
+else:
+    resultJson = result.to_json(indent=4, ensure_ascii=False);
+
+outFilePath = sys.stdout;
+if(args.output):
+    outFilePath = args.output;
+
+with open(outFilePath, 'w', encoding="utf-8") as fh:
+    fh.write(resultJson)
+
+if(args.output):
     logging.info("output written to %s" % (args.output))
