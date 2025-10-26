@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -e
+set -Ee
 
 
 jobs="$(($(./npproc.sh) + 1))";
