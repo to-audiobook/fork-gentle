@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -e
+set -Ee
 
 git submodule init
 git submodule update
