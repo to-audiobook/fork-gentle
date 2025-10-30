@@ -97,16 +97,16 @@ int main(int argc, char *argv[]) {
 #ifdef HAVE_CUDA
     fprintf(stdout, "Cuda enabled\n");
     CuDevice &cu_device = CuDevice::Instantiate();
-    cu_device.SetVerbose(true);
+    //cu_device.SetVerbose(true);
     cu_device.SelectGpuId("yes");
-    fprintf(stdout, "active gpu: %d\n", cu_device.ActiveGpuId());
+    //fprintf(stdout, "active gpu: %d\n", cu_device.ActiveGpuId());
 #endif
     const std::string ivector_model_dir = nnet_dir + "/ivector_extractor";
     const std::string nnet3_rxfilename = nnet_dir + "/final.mdl";
 
     const std::string word_syms_rxfilename = graph_dir + "/words.txt";
-    const string word_boundary_filename = graph_dir + "/phones/word_boundary.int";
-    const string phone_syms_rxfilename = graph_dir + "/phones.txt";
+    const std::string word_boundary_filename = graph_dir + "/phones/word_boundary.int";
+    const std::string phone_syms_rxfilename = graph_dir + "/phones.txt";
 
     WordBoundaryInfoNewOpts opts; // use default opts
     WordBoundaryInfo word_boundary_info(opts, word_boundary_filename);

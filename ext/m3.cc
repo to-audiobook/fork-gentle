@@ -65,11 +65,10 @@ int main(int argc, char *argv[]) {
 		}
 
 		// fstcompile
-		const SymbolTable *ssyms = 0;
-		fst::SymbolTableTextOptions opts;
-		const SymbolTable *isyms = SymbolTable::ReadText(words_filename, opts);
+		SymbolTable *ssyms = 0;
+		SymbolTable *isyms = SymbolTable::ReadText(words_filename);
 		if (!isyms) { return 1; }
-		const SymbolTable *osyms = SymbolTable::ReadText(words_filename, opts);
+		SymbolTable *osyms = SymbolTable::ReadText(words_filename);
 		if (!osyms) { return 1; }
 		std::ifstream grammar_fst_file(grammar_fst_filename.c_str());
 		FstCompiler<StdArc> fstcompiler(grammar_fst_file, "", isyms,
