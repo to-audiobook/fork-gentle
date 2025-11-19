@@ -23,6 +23,8 @@ class MultiThreadedTranscriber:
 
 
         def transcribe_chunk(idx):
+            process = multiprocessing.current_process();
+            logging.info(f'{process.name}: transcribe_chunk() started');
             wav_obj = wave.open(wavfile, 'rb')
             start_t = idx * (self.chunk_len - self.overlap_t)
             # Seek
@@ -33,18 +35,24 @@ class MultiThreadedTranscriber:
             if len(buf) < 4000:
                 logging.info('Short segment - ignored %d' % (idx))
                 ret = []
-            else:
+            else:                
+                logging.info(f'{process.name}: kaldi_queue.get()');
                 k = self.kaldi_queue.get()
+                logging.info(f'{process.name}: k.push_chunk(buf)');
                 k.push_chunk(buf)
+                logging.info(f'{process.name}: k.get_final()');
                 ret = k.get_final()
                 # k.reset() (no longer needed)
+                logging.info(f'{process.name}: kaldi_queue.put(k)');
                 self.kaldi_queue.put(k)
 
+            logging.info(f'{process.name}: chunks.append()');
             chunks.append({"start": start_t, "words": ret})
             logging.info('%d/%d' % (len(chunks), n_chunks))
             if progress_cb is not None:
                 progress_cb({"message": ' '.join([X['word'] for X in ret]),
                              "percent": len(chunks) / float(n_chunks)})
+            logging.info(f'{process.name}: transcribe_chunk() done!');
 
 
         pool = Pool(min(n_chunks, self.nthreads))

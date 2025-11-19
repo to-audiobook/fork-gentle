@@ -21,12 +21,11 @@ class Kaldi:
             logger.error('hclg_path does not exist: %s', hclg_path)
         self._p = subprocess.Popen(cmd,
                                    stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                   stderr=STDERR, bufsize=0)
+                                   stderr=STDERR)
         self.finished = False
 
     def _cmd(self, c):
-        self._p.stdin.write(("%s\n" % (c)).encode())
-        self._p.stdin.flush()
+        self._p.stdin.write(("%s\n" % (c)).encode())        
 
     def push_chunk(self, buf):
         # Wait until we're ready
@@ -35,11 +34,13 @@ class Kaldi:
         cnt = int(len(buf)/2)
         self._cmd(str(cnt))
         self._p.stdin.write(buf) #arr.tostring())
+        self._p.stdin.flush()
         status = self._p.stdout.readline().strip().decode()
         return status == 'ok'
 
     def get_final(self):
         self._cmd("get-final")
+        self._p.stdin.flush()
         words = []
         while True:
             line = self._p.stdout.readline().decode()
@@ -60,6 +61,7 @@ class Kaldi:
                 words[-1]['phones'].append(ph)
 
         self._reset()
+        self._p.stdin.flush()
         return words
 
     def _reset(self):
@@ -69,6 +71,7 @@ class Kaldi:
         if not self.finished:
             self.finished = True
             self._cmd("stop")
+            self._p.stdin.flush()
             self._p.stdin.close()
             self._p.stdout.close()
             self._p.wait()
