@@ -90,8 +90,6 @@ def realign(wavfile, alignment, ms, resources, nthreads=4, progress_cb=None):
         if progress_cb is not None:
             progress_cb({"percent": len(realignments) / float(len(to_realign))})
 
-        logging.info(f'{len(realignments)}/{len(to_realign)}')
-
     pool = Pool(nthreads)
     pool.map(realign, to_realign)
     pool.close()
