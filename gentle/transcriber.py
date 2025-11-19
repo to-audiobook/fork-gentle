@@ -45,7 +45,7 @@ class MultiThreadedTranscriber:
             if progress_cb is not None:
                 progress_cb({"message": ' '.join([X['word'] for X in ret]),
                              #"percent": len(chunks) / float(n_chunks)
-                             "progress": 'f{len(chunks)}/{n_chunks}'})
+                             "progress": f'{len(chunks)}/{n_chunks}'})
 
 
         pool = Pool(min(n_chunks, self.nthreads))
