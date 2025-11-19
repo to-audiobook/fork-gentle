@@ -20,6 +20,9 @@ class ForcedAligner():
         self.mtt = MultiThreadedTranscriber(self.queue, nthreads=nthreads)
 
     def transcribe(self, wavfile, progress_cb=None, logging=None):
+        if progress_cb is not None:
+            progress_cb({'status': 'TRANSCRIBING'})
+
         words, duration = self.mtt.transcribe(wavfile, progress_cb=progress_cb)
 
         # Clear queue (would this be gc'ed?)
