@@ -88,7 +88,6 @@ def realign(wavfile, alignment, ms, resources, nthreads=4, progress_cb=None):
         realignments.append({"chunk": chunk, "words": word_alignment})
 
         if progress_cb is not None:
-            #progress_cb({"percent": len(realignments) / float(len(to_realign))})
             progress_cb({"progress": f'{len(realignments)}/{len(to_realign)}'});
 
     pool = Pool(nthreads)
