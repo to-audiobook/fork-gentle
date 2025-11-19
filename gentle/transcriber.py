@@ -41,7 +41,7 @@ class MultiThreadedTranscriber:
                 self.kaldi_queue.put(k)
 
             chunks.append({"start": start_t, "words": ret})
-            logging.info('%d/%d' % (len(chunks), n_chunks))
+            #logging.info('%d/%d' % (len(chunks), n_chunks))
             if progress_cb is not None:
                 progress_cb({"message": ' '.join([X['word'] for X in ret]),
                              #"percent": len(chunks) / float(n_chunks)
