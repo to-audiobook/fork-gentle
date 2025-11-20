@@ -25,13 +25,22 @@ class Kaldi:
         self.finished = False
 
     def _cmd(self, c):
-        self._p.stdin.write(("%s\n" % (c)).encode())        
+        self._p.stdin.write(("%s\n" % (c)).encode())
+        self._p.stdin.flush()
 
     def push_chunk(self, buf):
         # Wait until we're ready
         self._cmd("push-chunk")
         
         cnt = int(len(buf)/2)
+
+        # we will write the whole buffer to stdin, but k3 will read only 
+        # {cnt * 2}. If {len(buf)} is not divisible by 2 then stdin will be left
+        # with "garbage" and when k3 tries to read what it thinks is the next
+        # command, bad things are likely to happen
+        if((cnt * 2) != len(buf)):
+            logging.info(f'Kaldi.push_chunk() buffer size not multiple of 2!!! len(buf): {len(buf)}');
+
         self._cmd(str(cnt))
         self._p.stdin.write(buf) #arr.tostring())
         self._p.stdin.flush()
@@ -40,7 +49,6 @@ class Kaldi:
 
     def get_final(self):
         self._cmd("get-final")
-        self._p.stdin.flush()
         words = []
         while True:
             line = self._p.stdout.readline().decode()
@@ -61,7 +69,6 @@ class Kaldi:
                 words[-1]['phones'].append(ph)
 
         self._reset()
-        self._p.stdin.flush()
         return words
 
     def _reset(self):
@@ -71,10 +78,7 @@ class Kaldi:
         if not self.finished:
             self.finished = True
             self._cmd("stop")
-            self._p.stdin.flush()
-            logger.info(f'PID:{self._p.pid} Kaldi.stop() - Waiting for process to finish...');
             self._p.wait()
-            logger.info(f'PID:{self._p.pid} Kaldi.stop() - Process finished');
             self._p.stdin.close()
             self._p.stdout.close()            
 
