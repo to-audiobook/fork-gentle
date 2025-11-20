@@ -21,6 +21,7 @@ class ForcedAligner():
         self.mtt = MultiThreadedTranscriber(self.queue, nthreads=nthreads)
 
     def __del__(self):
+        import os;
         os.unlink(self.gen_hclg_filename);
 
     def transcribe(self, wavfile, progress_cb=None, logging=None):
