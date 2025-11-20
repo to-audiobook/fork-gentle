@@ -66,19 +66,22 @@ def realign(wavfile, alignment, ms, resources, nthreads=4, progress_cb=None):
         chunk_ks = chunk_ms.get_kaldi_sequence()
 
         chunk_gen_hclg_filename = language_model.make_bigram_language_model(chunk_ks, resources.proto_langdir)
-        logging.info(f'chunk_gen_hclg_filename: "{chunk_gen_hclg_filename}"');
-        k = standard_kaldi.Kaldi(
-            resources.nnet_gpu_path,
-            chunk_gen_hclg_filename,
-            resources.proto_langdir)
+        try:
+            logging.info(f'chunk_gen_hclg_filename: "{chunk_gen_hclg_filename}"');
+            k = standard_kaldi.Kaldi(
+                resources.nnet_gpu_path,
+                chunk_gen_hclg_filename,
+                resources.proto_langdir)
 
-        wav_obj = wave.open(wavfile, 'rb')
-        wav_obj.setpos(int(start_t * wav_obj.getframerate()))
-        buf = wav_obj.readframes(int(duration * wav_obj.getframerate()))
+            wav_obj = wave.open(wavfile, 'rb')
+            wav_obj.setpos(int(start_t * wav_obj.getframerate()))
+            buf = wav_obj.readframes(int(duration * wav_obj.getframerate()))
 
-        k.push_chunk(buf)
-        ret = [transcription.Word(**wd) for wd in k.get_final()]
-        k.stop()
+            k.push_chunk(buf)
+            ret = [transcription.Word(**wd) for wd in k.get_final()]
+            k.stop()
+        finally:
+            os.unlink(chunk_gen_hclg_filename);
 
         word_alignment = diff_align.align(ret, chunk_ms)
 
