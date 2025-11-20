@@ -106,26 +106,23 @@ def make_bigram_language_model(kaldi_seq, proto_langdir, **kwargs):
 
     # Generate a textual FST
     txt_fst = make_bigram_lm_fst(kaldi_seq, **kwargs)
-    txt_fst_file = tempfile.NamedTemporaryFile(delete=False)
-    txt_fst_file.write(txt_fst)
-    txt_fst_file.close()
+    with tempfile.NamedTemporaryFile(delete=True) as txt_fst_file:
+        txt_fst_file.write(txt_fst)
+        txt_fst_file.flush();
 
-    hclg_filename = tempfile.mktemp(suffix='_HCLG.fst')
-    try:
-        devnull = open(os.devnull, 'wb')
-        subprocess.check_output([MKGRAPH_PATH,
-                        proto_langdir,
-                        txt_fst_file.name,
-                        hclg_filename],
-                        stderr=devnull)
-    except Exception as e:
+        hclg_filename = tempfile.mktemp(suffix='_HCLG.fst')
         try:
-            os.unlink(hclg_filename)
-        except:
-            pass
-        raise e
-    finally:
-        os.unlink(txt_fst_file.name)
+            subprocess.check_output([MKGRAPH_PATH,
+                            proto_langdir,
+                            txt_fst_file.name,
+                            hclg_filename],
+                            stderr=subprocess.DEVNULL)
+        except Exception as e:
+            try:
+                os.unlink(hclg_filename)
+            except:
+                pass
+            raise e
 
     return hclg_filename
 

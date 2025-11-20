@@ -66,6 +66,7 @@ def realign(wavfile, alignment, ms, resources, nthreads=4, progress_cb=None):
         chunk_ks = chunk_ms.get_kaldi_sequence()
 
         chunk_gen_hclg_filename = language_model.make_bigram_language_model(chunk_ks, resources.proto_langdir)
+        logging.info(f'chunk_gen_hclg_filename: "{chunk_gen_hclg_filename}"');
         k = standard_kaldi.Kaldi(
             resources.nnet_gpu_path,
             chunk_gen_hclg_filename,
