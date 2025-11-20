@@ -72,9 +72,11 @@ class Kaldi:
             self.finished = True
             self._cmd("stop")
             self._p.stdin.flush()
-            self._p.stdin.close()
-            self._p.stdout.close()
+            logger.info(f'PID:{self._p.id()} Kaldi.stop() - Waiting for process to finish...');
             self._p.wait()
+            logger.info(f'PID:{self._p.id()} Kaldi.stop() - Process finished');
+            self._p.stdin.close()
+            self._p.stdout.close()            
 
     def __del__(self):
         self.stop()
