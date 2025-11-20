@@ -33,7 +33,7 @@ class MultiThreadedTranscriber:
             if len(buf) < 4000:
                 logging.info('Short segment - ignored %d' % (idx))
                 ret = []
-            else:
+            else:                
                 k = self.kaldi_queue.get()
                 k.push_chunk(buf)
                 ret = k.get_final()
@@ -41,10 +41,9 @@ class MultiThreadedTranscriber:
                 self.kaldi_queue.put(k)
 
             chunks.append({"start": start_t, "words": ret})
-            logging.info('%d/%d' % (len(chunks), n_chunks))
             if progress_cb is not None:
                 progress_cb({"message": ' '.join([X['word'] for X in ret]),
-                             "percent": len(chunks) / float(n_chunks)})
+                             "progress": f'{len(chunks)}/{n_chunks}'})
 
 
         pool = Pool(min(n_chunks, self.nthreads))
