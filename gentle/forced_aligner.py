@@ -16,7 +16,8 @@ class ForcedAligner():
         self.ms = metasentence.MetaSentence(transcript, resources.vocab)
         ks = self.ms.get_kaldi_sequence()
         self.gen_hclg_filename = language_model.make_bigram_language_model(ks, resources.proto_langdir, **kwargs)
-        self.queue = kaldi_queue.build(resources, hclg_path=gen_hclg_filename, nthreads=nthreads)
+        self.gen_hclg_filename = language_model.make_bigram_language_model(ks, resources.proto_langdir, **kwargs)
+        self.queue = kaldi_queue.build(resources, hclg_path=self.gen_hclg_filename, nthreads=nthreads)
         self.mtt = MultiThreadedTranscriber(self.queue, nthreads=nthreads)
 
     def __del__(self):
