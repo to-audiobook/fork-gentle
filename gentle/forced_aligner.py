@@ -15,9 +15,12 @@ class ForcedAligner():
         self.resources = resources
         self.ms = metasentence.MetaSentence(transcript, resources.vocab)
         ks = self.ms.get_kaldi_sequence()
-        gen_hclg_filename = language_model.make_bigram_language_model(ks, resources.proto_langdir, **kwargs)
+        self.gen_hclg_filename = language_model.make_bigram_language_model(ks, resources.proto_langdir, **kwargs)
         self.queue = kaldi_queue.build(resources, hclg_path=gen_hclg_filename, nthreads=nthreads)
         self.mtt = MultiThreadedTranscriber(self.queue, nthreads=nthreads)
+
+    def __del__(self):
+        os.unlink(self.gen_hclg_filename);
 
     def transcribe(self, wavfile, progress_cb=None, logging=None):
         if progress_cb is not None:
