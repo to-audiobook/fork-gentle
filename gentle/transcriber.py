@@ -31,7 +31,7 @@ class MultiThreadedTranscriber:
             buf = wav_obj.readframes(int(self.chunk_len * wav_obj.getframerate()))
 
             if len(buf) < 4000:
-                logging.info('Short segment - ignored %d' % (idx))
+                #logging.info('Short segment - ignored %d' % (idx))
                 ret = []
             else:                
                 k = self.kaldi_queue.get()
