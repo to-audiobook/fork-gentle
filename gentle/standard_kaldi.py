@@ -86,7 +86,9 @@ class Kaldi:
                 chunk = self._p.stdout.read(4096);
                 if(len(chunk) <= 0):
                     break;
-            self._p.wait()
+            # the above does not seem to be enough. We are still deadlocking
+            # sometimes, so let's just kill the process
+            self._p.wait(timeout=2);
             self._p.stdin.close()
             self._p.stdout.close()            
 
