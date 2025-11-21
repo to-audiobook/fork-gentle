@@ -67,6 +67,7 @@ def realign(wavfile, alignment, ms, resources, nthreads=4, progress_cb=None):
 
         chunk_gen_hclg_filename = language_model.make_bigram_language_model(chunk_ks, resources.proto_langdir)
         try:
+            import multiprocessing;
             pid = multiprocessing.current_process().pid;
             logging.info(f'{pid}: creating Kaldi object');
             k = standard_kaldi.Kaldi(
