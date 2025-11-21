@@ -41,27 +41,32 @@ def realign(wavfile, alignment, ms, resources, nthreads=4, progress_cb=None):
     processedChunksHack = [0];
 
     def realign(chunk):
-        wav_obj = wave.open(wavfile, 'rb')
+        with wave.open(wavfile, 'rb') as wav_obj:
+            if chunk["start"] is None:
+                start_t = 0
+            else:
+                start_t = chunk["start"].end
 
-        if chunk["start"] is None:
-            start_t = 0
-        else:
-            start_t = chunk["start"].end
+            if chunk["end"] is None:
+                end_t = wav_obj.getnframes() / float(wav_obj.getframerate())
+            else:
+                end_t = chunk["end"].start
 
-        if chunk["end"] is None:
-            end_t = wav_obj.getnframes() / float(wav_obj.getframerate())
-        else:
-            end_t = chunk["end"].start
+            duration = end_t - start_t
+            # XXX: the minimum length seems bigger now (?)
+            if duration < 0.75 or duration > 60:
+                logging.debug("cannot realign %d words with duration %f" % (len(chunk['words']), duration))
+                
+                if progress_cb is not None:
+                    processedChunksHack[0] += 1;
+                    progress_cb({"progress": f'{processedChunksHack[0]}/{len(to_realign)}'});
+                return
 
-        duration = end_t - start_t
-        # XXX: the minimum length seems bigger now (?)
-        if duration < 0.75 or duration > 60:
-            logging.debug("cannot realign %d words with duration %f" % (len(chunk['words']), duration))
-            
-            if progress_cb is not None:
-                processedChunksHack[0] += 1;
-                progress_cb({"progress": f'{processedChunksHack[0]}/{len(to_realign)}'});
-            return
+            import threading;
+            pid = threading.current_thread().ident;
+            logging.info(f'{pid}: reading audio chunk');                
+            wav_obj.setpos(int(start_t * wav_obj.getframerate()))
+            buf = wav_obj.readframes(int(duration * wav_obj.getframerate()))
 
         # Create a language model
         offset_offset = chunk['words'][0].startOffset
@@ -72,18 +77,12 @@ def realign(wavfile, alignment, ms, resources, nthreads=4, progress_cb=None):
 
         chunk_gen_hclg_filename = language_model.make_bigram_language_model(chunk_ks, resources.proto_langdir)
         try:
-            import threading;
-            pid = threading.current_thread().ident;
+            
             logging.info(f'{pid}: creating Kaldi object');
             k = standard_kaldi.Kaldi(
                 resources.nnet_gpu_path,
                 chunk_gen_hclg_filename,
-                resources.proto_langdir)
-
-            logging.info(f'{pid}: reading audio chunk');
-            with wave.open(wavfile, 'rb') as wav_obj:
-                wav_obj.setpos(int(start_t * wav_obj.getframerate()))
-                buf = wav_obj.readframes(int(duration * wav_obj.getframerate()))
+                resources.proto_langdir)            
 
             logging.info(f'{pid}: k.push_chunk()');
             k.push_chunk(buf)
