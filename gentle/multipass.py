@@ -55,7 +55,7 @@ def realign(wavfile, alignment, ms, resources, nthreads=4, progress_cb=None):
             duration = end_t - start_t
             # XXX: the minimum length seems bigger now (?)
             if duration < 0.75 or duration > 60:
-                logging.debug("cannot realign %d words with duration %f" % (len(chunk['words']), duration))
+                #logging.debug("cannot realign %d words with duration %f" % (len(chunk['words']), duration))
                 
                 if progress_cb is not None:
                     processedChunksHack[0] += 1;
@@ -63,8 +63,8 @@ def realign(wavfile, alignment, ms, resources, nthreads=4, progress_cb=None):
                 return
 
             import threading;
-            pid = threading.current_thread().ident;
-            logging.info(f'{pid}: reading audio chunk');                
+            #pid = threading.current_thread().ident;
+            #logging.info(f'{pid}: reading audio chunk');                
             wav_obj.setpos(int(start_t * wav_obj.getframerate()))
             buf = wav_obj.readframes(int(duration * wav_obj.getframerate()))
 
@@ -78,30 +78,30 @@ def realign(wavfile, alignment, ms, resources, nthreads=4, progress_cb=None):
         chunk_gen_hclg_filename = language_model.make_bigram_language_model(chunk_ks, resources.proto_langdir)
         try:
             
-            logging.info(f'{pid}: creating Kaldi object');
+            #logging.info(f'{pid}: creating Kaldi object');
             k = standard_kaldi.Kaldi(
                 resources.nnet_gpu_path,
                 chunk_gen_hclg_filename,
                 resources.proto_langdir)            
 
-            logging.info(f'{pid}: k.push_chunk()');
+            #logging.info(f'{pid}: k.push_chunk()');
             k.push_chunk(buf)
-            logging.info(f'{pid}: k.get_final()');
+            #logging.info(f'{pid}: k.get_final()');
             ret = [transcription.Word(**wd) for wd in k.get_final()]
-            logging.info(f'{pid}: k.stop()...');
+            #logging.info(f'{pid}: k.stop()...');
             k.stop()
-            logging.info(f'{pid}: k.stop() done!');
+            #logging.info(f'{pid}: k.stop() done!');
         finally:
             os.unlink(chunk_gen_hclg_filename);
 
-        logging.info(f'{pid}: diff_align.align()...');
+        #logging.info(f'{pid}: diff_align.align()...');
         word_alignment = diff_align.align(ret, chunk_ms)
-        logging.info(f'{pid}: diff_align.align() done!');
+        #logging.info(f'{pid}: diff_align.align() done!');
 
-        logging.info(f'{pid}: for wd in word_alignment...');
+        #logging.info(f'{pid}: for wd in word_alignment...');
         for wd in word_alignment:
             wd.shift(time=start_t, offset=offset_offset)
-        logging.info(f'{pid}: for wd in word_alignment DONE!');
+        #logging.info(f'{pid}: for wd in word_alignment DONE!');
 
         # "chunk" should be replaced by "words"
         realignments.append({"chunk": chunk, "words": word_alignment})
@@ -110,16 +110,14 @@ def realign(wavfile, alignment, ms, resources, nthreads=4, progress_cb=None):
             processedChunksHack[0] += 1;
             progress_cb({"progress": f'{processedChunksHack[0]}/{len(to_realign)}'});
 
-        logging.info(f'{pid}: ALL DONE!');
+        #logging.info(f'{pid}: ALL DONE!');
 
-    #pool = Pool(nthreads)
-    import multiprocessing;
-    context = multiprocessing.get_context('forkserver');
+    pool = Pool(nthreads)    
     pool = context.Pool(nthreads);
     pool.map(realign, to_realign)
     pool.close()
 
-    logging.info(f'pool.close()');
+    #logging.info(f'pool.close()');
 
     # Sub in the replacements
     o_words = alignment
