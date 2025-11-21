@@ -38,6 +38,7 @@ def prepare_multipass(alignment):
 def realign(wavfile, alignment, ms, resources, nthreads=4, progress_cb=None):
     to_realign = prepare_multipass(alignment)
     realignments = []
+    processedChunks = 0;
 
     def realign(chunk):
         wav_obj = wave.open(wavfile, 'rb')
@@ -56,6 +57,10 @@ def realign(wavfile, alignment, ms, resources, nthreads=4, progress_cb=None):
         # XXX: the minimum length seems bigger now (?)
         if duration < 0.75 or duration > 60:
             logging.debug("cannot realign %d words with duration %f" % (len(chunk['words']), duration))
+            
+            if progress_cb is not None:
+                processedChunks += 1;
+                progress_cb({"progress": f'{processedChunks}/{len(to_realign)}'});
             return
 
         # Create a language model
@@ -67,8 +72,8 @@ def realign(wavfile, alignment, ms, resources, nthreads=4, progress_cb=None):
 
         chunk_gen_hclg_filename = language_model.make_bigram_language_model(chunk_ks, resources.proto_langdir)
         try:
-            import multiprocessing;
-            pid = multiprocessing.current_process().pid;
+            import threading;
+            pid = threading.Thread.ident;
             logging.info(f'{pid}: creating Kaldi object');
             k = standard_kaldi.Kaldi(
                 resources.nnet_gpu_path,
@@ -103,13 +108,16 @@ def realign(wavfile, alignment, ms, resources, nthreads=4, progress_cb=None):
         realignments.append({"chunk": chunk, "words": word_alignment})
 
         if progress_cb is not None:
-            progress_cb({"progress": f'{len(realignments)}/{len(to_realign)}'});
+            processedChunks += 1;
+            progress_cb({"progress": f'{processedChunks}/{len(to_realign)}'});
 
         logging.info(f'{pid}: ALL DONE!');
 
     pool = Pool(nthreads)
     pool.map(realign, to_realign)
     pool.close()
+
+    logging.info(f'pool.close()');
 
     # Sub in the replacements
     o_words = alignment

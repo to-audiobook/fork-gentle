@@ -46,10 +46,19 @@ class ForcedAligner():
 
         words = multipass.realign(wavfile, words, self.ms, resources=self.resources, nthreads=self.nthreads, progress_cb=progress_cb)
 
+        if progress_cb is not None:
+            progress_cb({'status': 'ALIGNING DONE!'})
+
         if logging is not None:
             logging.info("after 2nd pass: %d unaligned words (of %d)" % (len([X for X in words if X.not_found_in_audio()]), len(words)))
 
+        if progress_cb is not None:
+            progress_cb({'status': 'ADJACENTOPTIMIZER'});
+
         words = AdjacencyOptimizer(words, duration).optimize()
+
+        if progress_cb is not None:
+            progress_cb({'status': 'ADJACENTOPTIMIZER DONE!'});
 
         return Transcription(words=words, transcript=self.transcript)
 
