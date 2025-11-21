@@ -38,7 +38,7 @@ def prepare_multipass(alignment):
 def realign(wavfile, alignment, ms, resources, nthreads=4, progress_cb=None):
     to_realign = prepare_multipass(alignment)
     realignments = []
-    processedChunks = 0;
+    processedChunksHack = [0];
 
     def realign(chunk):
         wav_obj = wave.open(wavfile, 'rb')
@@ -59,8 +59,8 @@ def realign(wavfile, alignment, ms, resources, nthreads=4, progress_cb=None):
             logging.debug("cannot realign %d words with duration %f" % (len(chunk['words']), duration))
             
             if progress_cb is not None:
-                processedChunks += 1;
-                progress_cb({"progress": f'{processedChunks}/{len(to_realign)}'});
+                processedChunksHack[0] += 1;
+                progress_cb({"progress": f'{processedChunksHack[0]}/{len(to_realign)}'});
             return
 
         # Create a language model
@@ -108,8 +108,8 @@ def realign(wavfile, alignment, ms, resources, nthreads=4, progress_cb=None):
         realignments.append({"chunk": chunk, "words": word_alignment})
 
         if progress_cb is not None:
-            processedChunks += 1;
-            progress_cb({"progress": f'{processedChunks}/{len(to_realign)}'});
+            processedChunksHack[0] += 1;
+            progress_cb({"progress": f'{processedChunksHack[0]}/{len(to_realign)}'});
 
         logging.info(f'{pid}: ALL DONE!');
 
