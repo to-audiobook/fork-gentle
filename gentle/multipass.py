@@ -112,8 +112,7 @@ def realign(wavfile, alignment, ms, resources, nthreads=4, progress_cb=None):
 
         #logging.info(f'{pid}: ALL DONE!');
 
-    pool = Pool(nthreads)    
-    pool = context.Pool(nthreads);
+    pool = Pool(nthreads)
     pool.map(realign, to_realign)
     pool.close()
 
