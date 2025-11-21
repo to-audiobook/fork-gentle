@@ -67,31 +67,44 @@ def realign(wavfile, alignment, ms, resources, nthreads=4, progress_cb=None):
 
         chunk_gen_hclg_filename = language_model.make_bigram_language_model(chunk_ks, resources.proto_langdir)
         try:
+            pid = multiprocessing.current_process().pid;
+            logging.info(f'{pid}: creating Kaldi object');
             k = standard_kaldi.Kaldi(
                 resources.nnet_gpu_path,
                 chunk_gen_hclg_filename,
                 resources.proto_langdir)
 
-            wav_obj = wave.open(wavfile, 'rb')
-            wav_obj.setpos(int(start_t * wav_obj.getframerate()))
-            buf = wav_obj.readframes(int(duration * wav_obj.getframerate()))
+            logging.info(f'{pid}: reading audio chunk');
+            with wave.open(wavfile, 'rb') as wav_obj:
+                wav_obj.setpos(int(start_t * wav_obj.getframerate()))
+                buf = wav_obj.readframes(int(duration * wav_obj.getframerate()))
 
+            logging.info(f'{pid}: k.push_chunk()');
             k.push_chunk(buf)
+            logging.info(f'{pid}: k.get_final()');
             ret = [transcription.Word(**wd) for wd in k.get_final()]
+            logging.info(f'{pid}: k.stop()...');
             k.stop()
+            logging.info(f'{pid}: k.stop() done!');
         finally:
             os.unlink(chunk_gen_hclg_filename);
 
+        logging.info(f'{pid}: diff_align.align()...');
         word_alignment = diff_align.align(ret, chunk_ms)
+        logging.info(f'{pid}: diff_align.align() done!');
 
+        logging.info(f'{pid}: for wd in word_alignment...');
         for wd in word_alignment:
             wd.shift(time=start_t, offset=offset_offset)
+        logging.info(f'{pid}: for wd in word_alignment DONE!');
 
         # "chunk" should be replaced by "words"
         realignments.append({"chunk": chunk, "words": word_alignment})
 
         if progress_cb is not None:
             progress_cb({"progress": f'{len(realignments)}/{len(to_realign)}'});
+
+        logging.info(f'{pid}: ALL DONE!');
 
     pool = Pool(nthreads)
     pool.map(realign, to_realign)
