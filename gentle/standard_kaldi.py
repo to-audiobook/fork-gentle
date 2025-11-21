@@ -78,6 +78,14 @@ class Kaldi:
         if not self.finished:
             self.finished = True
             self._cmd("stop")
+            # read everything from stdout before waiting for the child process
+            # to terminate, just in case the child process was waiting for the
+            # buffer to have enough space to write stuff. Otherwise we might
+            # deadlock ourselves
+            while(True):
+                chunk = self._p.stdout.read(4096);
+                if(len(chunk) <= 0):
+                    break;
             self._p.wait()
             self._p.stdin.close()
             self._p.stdout.close()            
