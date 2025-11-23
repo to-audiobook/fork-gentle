@@ -57,11 +57,9 @@ def realign(wavfile, alignment, ms, resources, nthreads=4, progress_cb=None):
             nonlocal processedChunks;
 
             def incrementProcessedChunks():
-                #with progressLock:
-                #     processedChunks += 1;
-                #    return processedChunks;
-                processedChunks += 1;
-                return processedChunks;
+                with progressLock:
+                    processedChunks = processedChunks + 1;
+                    return processedChunks;                
 
             with wave.open(wavfile, 'rb') as wav_obj:
                 if chunk["start"] is None:
