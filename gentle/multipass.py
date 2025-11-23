@@ -38,11 +38,22 @@ def prepare_multipass(alignment):
 def realign(wavfile, alignment, ms, resources, nthreads=4, progress_cb=None):
     to_realign = prepare_multipass(alignment)
     realignments = []
-    processedChunks = 0;
-
+    
     import threading;
     realignmentsLock = threading.Lock();
-    progressLock = threading.Lock();
+
+    class Counter:
+        def __init__(self):            
+            self._value = 0;
+            self._lock = threading.Lock();
+        def Increment(self):
+            with self._lock:
+                self._value += 1;
+        def Value(self):
+            with self._lock:
+                return self._value;
+
+    processedChunks = Counter();
 
     def progressCallbackDebug(text:str):
         if progress_cb is not None:
@@ -54,12 +65,11 @@ def realign(wavfile, alignment, ms, resources, nthreads=4, progress_cb=None):
         try:
             # all threads will use the processedChunks variable declared a couple
             # of line above
-            nonlocal processedChunks;
+            global processedChunks;
 
             def incrementProcessedChunks():
-                with progressLock:
-                    processedChunks = processedChunks + 1;
-                    return processedChunks;                
+                processedChunks.Increment();
+                return processedChunks.Value();
 
             with wave.open(wavfile, 'rb') as wav_obj:
                 if chunk["start"] is None:
