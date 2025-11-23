@@ -40,6 +40,7 @@ def realign(wavfile, alignment, ms, resources, nthreads=4, progress_cb=None):
     realignments = []
     
     import threading;
+    import traceback;
     realignmentsLock = threading.Lock();
 
     class Counter:
@@ -136,7 +137,7 @@ def realign(wavfile, alignment, ms, resources, nthreads=4, progress_cb=None):
             if progress_cb is not None:
                 progress_cb({"progress": f'{p}/{len(to_realign)}'});
         except Exception as e:
-            progressCallbackDebug(repr(e));
+            progressCallbackDebug(traceback.format_exc());
 
         progressCallbackDebug('done');
 
