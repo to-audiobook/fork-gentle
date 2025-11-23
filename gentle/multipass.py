@@ -54,12 +54,14 @@ def realign(wavfile, alignment, ms, resources, nthreads=4, progress_cb=None):
         try:
             # all threads will use the processedChunks variable declared a couple
             # of line above
-            global processedChunks;
+            nonlocal processedChunks;
 
             def incrementProcessedChunks():
-                with progressLock:
-                    processedChunks += 1;
-                    return processedChunks;
+                #with progressLock:
+                #     processedChunks += 1;
+                #    return processedChunks;
+                processedChunks += 1;
+                return processedChunks;
 
             with wave.open(wavfile, 'rb') as wav_obj:
                 if chunk["start"] is None:
@@ -131,6 +133,7 @@ def realign(wavfile, alignment, ms, resources, nthreads=4, progress_cb=None):
                 progress_cb({"progress": f'{p}/{len(to_realign)}'});
         except Exception as e:
             progressCallbackDebug(repr(e));
+
         progressCallbackDebug('done');
 
     pool = Pool(nthreads)
