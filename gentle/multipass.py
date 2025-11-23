@@ -63,10 +63,6 @@ def realign(wavfile, alignment, ms, resources, nthreads=4, progress_cb=None):
     def realign(chunk):
         progressCallbackDebug('start');
         try:
-            # all threads will use the processedChunks variable declared a couple
-            # of line above
-            global processedChunks;
-
             def incrementProcessedChunks():
                 processedChunks.Increment();
                 return processedChunks.Value();
