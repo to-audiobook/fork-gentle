@@ -39,7 +39,7 @@ class Kaldi:
         # with "garbage" and when k3 tries to read what it thinks is the next
         # command, bad things are likely to happen
         if((cnt * 2) != len(buf)):
-            logging.info(f'Kaldi.push_chunk() buffer size not multiple of 2!!! len(buf): {len(buf)}');
+            raise Exception(f'Kaldi.push_chunk() buffer size not multiple of 2!!! len(buf): {len(buf)}');
 
         self._cmd(str(cnt))
         self._p.stdin.write(buf) #arr.tostring())
@@ -86,9 +86,17 @@ class Kaldi:
                 chunk = self._p.stdout.read(4096);
                 if(len(chunk) <= 0):
                     break;
-            # the above does not seem to be enough. We are still deadlocking
-            # sometimes, so let's just kill the process
-            self._p.wait(timeout=2);
+            # in case the above is not enough, we wait for 10 seconds, ask
+            # nicely and then, if it still has not finished, we kill it
+            # kill the process
+            try:
+                self._p.wait(timeout=10);
+            except:
+                self._p.terminate();
+                try:
+                    self._p.wait(timeout=10);
+                except:
+                    self._p.kill();
             self._p.stdin.close()
             self._p.stdout.close()            
 

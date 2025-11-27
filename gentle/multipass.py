@@ -62,7 +62,6 @@ def realign(wavfile, alignment, ms, resources, nthreads=4, progress_cb=None):
             progress_cb({'debug_realign': f'{tid}: {text}'});
 
     def realign(chunk):
-        progressCallbackDebug('start');
         try:
             def incrementProcessedChunks():
                 processedChunks.Increment();
@@ -82,8 +81,6 @@ def realign(wavfile, alignment, ms, resources, nthreads=4, progress_cb=None):
                 duration = end_t - start_t
                 # XXX: the minimum length seems bigger now (?)
                 if duration < 0.75 or duration > 60:
-                    #logging.debug("cannot realign %d words with duration %f" % (len(chunk['words']), duration))
-                    
                     p = incrementProcessedChunks();
                     if progress_cb is not None:                    
                         progress_cb({"progress": f'{p}/{len(to_realign)}'});
@@ -103,31 +100,20 @@ def realign(wavfile, alignment, ms, resources, nthreads=4, progress_cb=None):
 
             chunk_gen_hclg_filename = language_model.make_bigram_language_model(chunk_ks, resources.proto_langdir)
             try:
-                
-                #logging.info(f'{pid}: creating Kaldi object');
                 k = standard_kaldi.Kaldi(
                     resources.nnet_gpu_path,
                     chunk_gen_hclg_filename,
                     resources.proto_langdir)            
-
-                #logging.info(f'{pid}: k.push_chunk()');
+                
                 k.push_chunk(buf)
-                #logging.info(f'{pid}: k.get_final()');
                 ret = [transcription.Word(**wd) for wd in k.get_final()]
-                #logging.info(f'{pid}: k.stop()...');
                 k.stop()
-                #logging.info(f'{pid}: k.stop() done!');
             finally:
                 os.unlink(chunk_gen_hclg_filename);
-
-            #logging.info(f'{pid}: diff_align.align()...');
+            
             word_alignment = diff_align.align(ret, chunk_ms)
-            #logging.info(f'{pid}: diff_align.align() done!');
-
-            #logging.info(f'{pid}: for wd in word_alignment...');
             for wd in word_alignment:
                 wd.shift(time=start_t, offset=offset_offset)
-            #logging.info(f'{pid}: for wd in word_alignment DONE!');
 
             # "chunk" should be replaced by "words"
             with realignmentsLock:
@@ -138,14 +124,11 @@ def realign(wavfile, alignment, ms, resources, nthreads=4, progress_cb=None):
                 progress_cb({"progress": f'{p}/{len(to_realign)}'});
         except Exception as e:
             progressCallbackDebug(traceback.format_exc());
-
-        progressCallbackDebug('done');
+        
 
     pool = Pool(nthreads)
     pool.map(realign, to_realign)
     pool.close()
-
-    #logging.info(f'pool.close()');
 
     # Sub in the replacements
     o_words = alignment
