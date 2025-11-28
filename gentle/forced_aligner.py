@@ -15,9 +15,13 @@ class ForcedAligner():
         self.resources = resources
         self.ms = metasentence.MetaSentence(transcript, resources.vocab)
         ks = self.ms.get_kaldi_sequence()
-        gen_hclg_filename = language_model.make_bigram_language_model(ks, resources.proto_langdir, **kwargs)
-        self.queue = kaldi_queue.build(resources, hclg_path=gen_hclg_filename, nthreads=nthreads)
+        self.gen_hclg_filename = language_model.make_bigram_language_model(ks, resources.proto_langdir, **kwargs)
+        self.queue = kaldi_queue.build(resources, hclg_path=self.gen_hclg_filename, nthreads=nthreads)
         self.mtt = MultiThreadedTranscriber(self.queue, nthreads=nthreads)
+
+    def __del__(self):
+        import os;
+        os.unlink(self.gen_hclg_filename);
 
     def transcribe(self, wavfile, progress_cb=None, logging=None):
         if progress_cb is not None:
@@ -42,10 +46,19 @@ class ForcedAligner():
 
         words = multipass.realign(wavfile, words, self.ms, resources=self.resources, nthreads=self.nthreads, progress_cb=progress_cb)
 
+        if progress_cb is not None:
+            progress_cb({'status': 'ALIGNING DONE!'})
+
         if logging is not None:
             logging.info("after 2nd pass: %d unaligned words (of %d)" % (len([X for X in words if X.not_found_in_audio()]), len(words)))
 
+        if progress_cb is not None:
+            progress_cb({'status': 'ADJACENTOPTIMIZER'});
+
         words = AdjacencyOptimizer(words, duration).optimize()
+
+        if progress_cb is not None:
+            progress_cb({'status': 'ADJACENTOPTIMIZER DONE!'});
 
         return Transcription(words=words, transcript=self.transcript)
 

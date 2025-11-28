@@ -38,57 +38,93 @@ def prepare_multipass(alignment):
 def realign(wavfile, alignment, ms, resources, nthreads=4, progress_cb=None):
     to_realign = prepare_multipass(alignment)
     realignments = []
+    
+    import threading;
+    import traceback;
+    realignmentsLock = threading.Lock();
+
+    class Counter:
+        def __init__(self):            
+            self._value = 0;
+            self._lock = threading.Lock();
+        def Increment(self):
+            with self._lock:
+                self._value += 1;
+        def Value(self):
+            with self._lock:
+                return self._value;
+
+    processedChunks = Counter();
+
+    def progressCallbackDebug(text:str):
+        if progress_cb is not None:
+            tid = threading.current_thread().ident;
+            progress_cb({'debug_realign': f'{tid}: {text}'});
 
     def realign(chunk):
-        wav_obj = wave.open(wavfile, 'rb')
+        try:
+            def incrementProcessedChunks():
+                processedChunks.Increment();
+                return processedChunks.Value();
 
-        if chunk["start"] is None:
-            start_t = 0
-        else:
-            start_t = chunk["start"].end
+            with wave.open(wavfile, 'rb') as wav_obj:
+                if chunk["start"] is None:
+                    start_t = 0
+                else:
+                    start_t = chunk["start"].end
 
-        if chunk["end"] is None:
-            end_t = wav_obj.getnframes() / float(wav_obj.getframerate())
-        else:
-            end_t = chunk["end"].start
+                if chunk["end"] is None:
+                    end_t = wav_obj.getnframes() / float(wav_obj.getframerate())
+                else:
+                    end_t = chunk["end"].start
 
-        duration = end_t - start_t
-        # XXX: the minimum length seems bigger now (?)
-        if duration < 0.75 or duration > 60:
-            logging.debug("cannot realign %d words with duration %f" % (len(chunk['words']), duration))
-            return
+                duration = end_t - start_t
+                # XXX: the minimum length seems bigger now (?)
+                if duration < 0.75 or duration > 60:
+                    p = incrementProcessedChunks();
+                    if progress_cb is not None:                    
+                        progress_cb({"progress": f'{p}/{len(to_realign)}'});
+                    return
 
-        # Create a language model
-        offset_offset = chunk['words'][0].startOffset
-        chunk_len = chunk['words'][-1].endOffset - offset_offset
-        chunk_transcript = ms.raw_sentence[offset_offset:offset_offset+chunk_len].encode("utf-8")
-        chunk_ms = metasentence.MetaSentence(chunk_transcript, resources.vocab)
-        chunk_ks = chunk_ms.get_kaldi_sequence()
+                
+                #logging.info(f'{pid}: reading audio chunk');
+                wav_obj.setpos(int(start_t * wav_obj.getframerate()))
+                buf = wav_obj.readframes(int(duration * wav_obj.getframerate()))
 
-        chunk_gen_hclg_filename = language_model.make_bigram_language_model(chunk_ks, resources.proto_langdir)
-        k = standard_kaldi.Kaldi(
-            resources.nnet_gpu_path,
-            chunk_gen_hclg_filename,
-            resources.proto_langdir)
+            # Create a language model
+            offset_offset = chunk['words'][0].startOffset
+            chunk_len = chunk['words'][-1].endOffset - offset_offset
+            chunk_transcript = ms.raw_sentence[offset_offset:offset_offset+chunk_len].encode("utf-8")
+            chunk_ms = metasentence.MetaSentence(chunk_transcript, resources.vocab)
+            chunk_ks = chunk_ms.get_kaldi_sequence()
 
-        wav_obj = wave.open(wavfile, 'rb')
-        wav_obj.setpos(int(start_t * wav_obj.getframerate()))
-        buf = wav_obj.readframes(int(duration * wav_obj.getframerate()))
+            chunk_gen_hclg_filename = language_model.make_bigram_language_model(chunk_ks, resources.proto_langdir)
+            try:
+                k = standard_kaldi.Kaldi(
+                    resources.nnet_gpu_path,
+                    chunk_gen_hclg_filename,
+                    resources.proto_langdir)            
+                
+                k.push_chunk(buf)
+                ret = [transcription.Word(**wd) for wd in k.get_final()]
+                k.stop()
+            finally:
+                os.unlink(chunk_gen_hclg_filename);
+            
+            word_alignment = diff_align.align(ret, chunk_ms)
+            for wd in word_alignment:
+                wd.shift(time=start_t, offset=offset_offset)
 
-        k.push_chunk(buf)
-        ret = [transcription.Word(**wd) for wd in k.get_final()]
-        k.stop()
+            # "chunk" should be replaced by "words"
+            with realignmentsLock:
+                realignments.append({"chunk": chunk, "words": word_alignment})
 
-        word_alignment = diff_align.align(ret, chunk_ms)
-
-        for wd in word_alignment:
-            wd.shift(time=start_t, offset=offset_offset)
-
-        # "chunk" should be replaced by "words"
-        realignments.append({"chunk": chunk, "words": word_alignment})
-
-        if progress_cb is not None:
-            progress_cb({"progress": f'{len(realignments)}/{len(to_realign)}'});
+            p = incrementProcessedChunks();
+            if progress_cb is not None:
+                progress_cb({"progress": f'{p}/{len(to_realign)}'});
+        except Exception as e:
+            progressCallbackDebug(traceback.format_exc());
+        
 
     pool = Pool(nthreads)
     pool.map(realign, to_realign)
