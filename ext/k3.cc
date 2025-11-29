@@ -213,6 +213,7 @@ int main(int argc, char *argv[]) {
       decoder.AdvanceDecoding();
 
       fprintf(stdout, "ok\n");
+	  fflush(stdout);
     }
     else if(strcmp(cmd, "get-final\n") == 0) {
       feature_pipeline.InputFinished(); // Computes last few frames of input
@@ -255,7 +256,7 @@ int main(int argc, char *argv[]) {
       }
 
       fprintf(stdout, "done with words\n");
-
+      fflush(stdout);
     }
     else {
 
