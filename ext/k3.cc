@@ -17,6 +17,41 @@
 
 const int arate = 8000;
 
+
+class File
+{
+  public:
+    File(FILE* handle) : _handle(handle)
+    {
+    }
+
+    ~File(void)
+    {
+      Close();
+    }
+
+    void Close(void)
+    {
+      if(_handle != NULL)
+      {
+        fclose(_handle);
+        _handle = NULL;
+      }
+    }
+
+    FILE* Get(void)
+    {
+      return _handle;
+    }
+    
+  private:
+    File(const File&) = delete;
+    File& operator=(const File&) = delete;
+
+    FILE* _handle = NULL;
+};
+
+
 void ConfigFeatureInfo(kaldi::OnlineNnet2FeaturePipelineInfo& info,
                        std::string ivector_model_dir) {
     // Configure inline to avoid absolute paths in ".conf" files
@@ -71,7 +106,7 @@ void ConfigEndpoint(kaldi::OnlineEndpointConfig& config) {
   config.silence_phones = "1:2:3:4:5:6:7:8:9:10:11:12:13:14:15:16:17:18:19:20";
 }
 void usage() {
-  fprintf(stderr, "usage: k3 [nnet_dir hclg_path]\n");
+  fprintf(stderr, "usage: k3 [nnet_dir hclg_path in_data_path out_data_path]\n");
 }
 
 int main(int argc, char *argv[]) {
@@ -83,11 +118,15 @@ int main(int argc, char *argv[]) {
     std::string nnet_dir = "exp/tdnn_7b_chain_online";
     std::string graph_dir = nnet_dir + "/graph_pp";
     std::string fst_rxfilename = graph_dir + "/HCLG.fst";
+    const char* in_data_path = nullptr;
+    const char* out_data_path = nullptr;
 
-    if(argc == 3) {
+    if(argc == 5) {
       nnet_dir = argv[1];
       graph_dir = nnet_dir + "/graph_pp";
       fst_rxfilename = argv[2];
+      in_data_path = argv[3];
+      out_data_path = argv[4];
     }
     else if(argc != 1) {
       usage();
@@ -161,107 +200,96 @@ int main(int argc, char *argv[]) {
                                         &feature_pipeline);
 
 
-  char cmd[1024];
+    char cmd[1024] = {};
 
-  while(true) {
-    // Let the client decide what we should do...
-    fgets(cmd, sizeof(cmd), stdin);
-
-    if(strcmp(cmd,"stop\n") == 0) {
-      break;
+    // open the input file
+    inFile = fopen(in_data_path, "rb");
+    if(inFile == NULL)
+    {
+      fprintf(stderr, "Unable to open input file \"%s\"\n", in_data_path);
+      return EXIT_FAILURE;
     }
-    else if(strcmp(cmd,"reset\n") == 0) {
-      feature_pipeline.~OnlineNnet2FeaturePipeline();
-      new (&feature_pipeline) OnlineNnet2FeaturePipeline(feature_info);
 
-      decoder.~SingleUtteranceNnet3Decoder();
-      new (&decoder) SingleUtteranceNnet3Decoder(nnet3_decoding_config,
-                                                 trans_model,
-						 de_nnet_simple_looped_info,
-                                                 //am_nnet,
-                                                 *decode_fst,
-                                                 &feature_pipeline);
+    inFileGuard = File(inFile);
+
+    // Get chunk length from python
+    int chunk_len;      
+    fgets(cmd, sizeof(cmd), inFile);
+    sscanf(cmd, "%d\n", &chunk_len);
+
+    int16_t audio_chunk[chunk_len];
+    Vector<BaseFloat> wave_part = Vector<BaseFloat>(chunk_len);
+
+    fread(&audio_chunk, 2, chunk_len, inFile);
+
+    // We need to copy this into the `wave_part' Vector<BaseFloat> thing.
+    // From `gst-audio-source.cc' in gst-kaldi-nnet2
+    for (int i = 0; i < chunk_len ; ++i) {
+      (wave_part)(i) = static_cast<BaseFloat>(audio_chunk[i]);
     }
-    else if(strcmp(cmd,"push-chunk\n") == 0) {
 
-      // Get chunk length from python
-      int chunk_len;
-      fgets(cmd, sizeof(cmd), stdin);
-      sscanf(cmd, "%d\n", &chunk_len);
+    feature_pipeline.AcceptWaveform(arate, wave_part);
 
-      int16_t audio_chunk[chunk_len];
-      Vector<BaseFloat> wave_part = Vector<BaseFloat>(chunk_len);
+    std::vector<std::pair<int32, BaseFloat> > delta_weights;
+    if (silence_weighting.Active()) {
+      silence_weighting.ComputeCurrentTraceback(decoder.Decoder());
+      silence_weighting.GetDeltaWeights(feature_pipeline.NumFramesReady(),
+                                        &delta_weights);
+      feature_pipeline.IvectorFeature()->UpdateFrameWeights(delta_weights);
+    }
 
-      fread(&audio_chunk, 2, chunk_len, stdin);
+    decoder.AdvanceDecoding();
+  
+    // write the result to the output file
+    feature_pipeline.InputFinished(); // Computes last few frames of input
+    decoder.AdvanceDecoding();        // Decodes remaining frames
+    decoder.FinalizeDecoding();
 
-      // We need to copy this into the `wave_part' Vector<BaseFloat> thing.
-      // From `gst-audio-source.cc' in gst-kaldi-nnet2
-      for (int i = 0; i < chunk_len ; ++i) {
-        (wave_part)(i) = static_cast<BaseFloat>(audio_chunk[i]);
+    Lattice final_lat;
+    decoder.GetBestPath(true, &final_lat);
+    CompactLattice clat;
+    ConvertLattice(final_lat, &clat);
+
+    // Compute prons alignment (see: kaldi/latbin/nbest-to-prons.cc)
+    CompactLattice aligned_clat;
+
+    std::vector<int32> words, times, lengths;
+    std::vector<std::vector<int32> > prons;
+    std::vector<std::vector<int32> > phone_lengths;
+
+    WordAlignLattice(clat, trans_model, word_boundary_info,
+                      0, &aligned_clat);
+
+    CompactLatticeToWordProns(trans_model, aligned_clat, &words, &times,
+                              &lengths, &prons, &phone_lengths);
+
+    FILE* outFile = fopen(out_data_path, "wb");
+    if(inFile == NULL)
+    {
+      fprintf(stderr, "Unable to create output file \"%s\"\n", out_data_path);
+      return EXIT_FAILURE;
+    }
+
+    outFileGuard = File(outFile);
+
+    for (int i = 0; i < words.size(); i++) {
+      if(words[i] == 0) {
+        // <eps> links - silence
+        continue;
       }
-
-      feature_pipeline.AcceptWaveform(arate, wave_part);
-
-      std::vector<std::pair<int32, BaseFloat> > delta_weights;
-      if (silence_weighting.Active()) {
-        silence_weighting.ComputeCurrentTraceback(decoder.Decoder());
-        silence_weighting.GetDeltaWeights(feature_pipeline.NumFramesReady(),
-                                          &delta_weights);
-        feature_pipeline.IvectorFeature()->UpdateFrameWeights(delta_weights);
+      fprintf(outFile, "word: %s / start: %f / duration: %f\n",
+              word_syms->Find(words[i]).c_str(),
+              times[i] * frame_shift,
+              lengths[i] * frame_shift);
+      // Print out the phonemes for this word
+      for(size_t j=0; j<phone_lengths[i].size(); j++) {
+        fprintf(outFile, "phone: %s / duration: %f\n",
+                phone_syms->Find(prons[i][j]).c_str(),
+                phone_lengths[i][j] * frame_shift);
       }
-
-      decoder.AdvanceDecoding();
-
-      fprintf(stdout, "ok\n");
-	  fflush(stdout);
     }
-    else if(strcmp(cmd, "get-final\n") == 0) {
-      feature_pipeline.InputFinished(); // Computes last few frames of input
-      decoder.AdvanceDecoding();        // Decodes remaining frames
-      decoder.FinalizeDecoding();
 
-      Lattice final_lat;
-      decoder.GetBestPath(true, &final_lat);
-      CompactLattice clat;
-      ConvertLattice(final_lat, &clat);
-
-      // Compute prons alignment (see: kaldi/latbin/nbest-to-prons.cc)
-      CompactLattice aligned_clat;
-
-      std::vector<int32> words, times, lengths;
-      std::vector<std::vector<int32> > prons;
-      std::vector<std::vector<int32> > phone_lengths;
-
-      WordAlignLattice(clat, trans_model, word_boundary_info,
-                       0, &aligned_clat);
-
-      CompactLatticeToWordProns(trans_model, aligned_clat, &words, &times,
-                                &lengths, &prons, &phone_lengths);
-
-      for (int i = 0; i < words.size(); i++) {
-        if(words[i] == 0) {
-          // <eps> links - silence
-          continue;
-        }
-        fprintf(stdout, "word: %s / start: %f / duration: %f\n",
-                word_syms->Find(words[i]).c_str(),
-                times[i] * frame_shift,
-                lengths[i] * frame_shift);
-        // Print out the phonemes for this word
-        for(size_t j=0; j<phone_lengths[i].size(); j++) {
-          fprintf(stdout, "phone: %s / duration: %f\n",
-                  phone_syms->Find(prons[i][j]).c_str(),
-                  phone_lengths[i][j] * frame_shift);
-        }
-      }
-
-      fprintf(stdout, "done with words\n");
-      fflush(stdout);
-    }
-    else {
-
-      fprintf(stderr, "unknown command %s\n", cmd);
-
-    }
-  }
+    fprintf(outFile, "done with words\n");
+    
+    return EXIT_SUCCESS;
 }

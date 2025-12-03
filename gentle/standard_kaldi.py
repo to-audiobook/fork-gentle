@@ -1,6 +1,7 @@
 import subprocess
 import os
 import logging
+import tempfile;
 
 from .util.paths import get_binary
 
@@ -11,27 +12,13 @@ STDERR = subprocess.DEVNULL
 
 class Kaldi:
     def __init__(self, nnet_dir=None, hclg_path=None, proto_langdir=None):
-        cmd = [EXECUTABLE_PATH]
+        self.nnet_dir = nnet_dir;
+        self.hclg_path = hclg_path;
         
-        if nnet_dir is not None:
-            cmd.append(nnet_dir)
-            cmd.append(hclg_path)
-
         if not os.path.exists(hclg_path):
             logger.error('hclg_path does not exist: %s', hclg_path)
-        self._p = subprocess.Popen(cmd,
-                                   stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                   stderr=STDERR)
-        self.finished = False
-
-    def _cmd(self, c):
-        self._p.stdin.write(("%s\n" % (c)).encode())
-        self._p.stdin.flush()
 
     def push_chunk(self, buf):
-        # Wait until we're ready
-        self._cmd("push-chunk")
-        
         cnt = int(len(buf)/2)
 
         # we will write the whole buffer to stdin, but k3 will read only 
@@ -41,67 +28,58 @@ class Kaldi:
         if((cnt * 2) != len(buf)):
             raise Exception(f'Kaldi.push_chunk() buffer size not multiple of 2!!! len(buf): {len(buf)}');
 
-        self._cmd(str(cnt))
-        self._p.stdin.write(buf) #arr.tostring())
-        self._p.stdin.flush()
-        status = self._p.stdout.readline().strip().decode()
-        return status == 'ok'
+        # create temporary files we will use to send data and read the results
+        # from the k3 application
+        with tempfile.NamedTemporaryFile(mode='w', delete=True) as chunkFile, \
+            tempfile.NamedTemporaryFile(mode='rw', delete=True) as resultFile:
+            chunkFile.write(str(cnt));
+            chunkFile.write(buf);
+            chunkFile.flush();
 
-    def get_final(self):
-        self._cmd("get-final")
-        words = []
-        while True:
-            line = self._p.stdout.readline().decode()
-            if line.startswith("done"):
-                break
-            parts = line.split(' / ')
-            if line.startswith('word'):
-                wd = {}
-                wd['word'] = parts[0].split(': ')[1]
-                wd['start'] = float(parts[1].split(': ')[1])
-                wd['duration'] = float(parts[2].split(': ')[1])
-                wd['phones'] = []
-                words.append(wd)
-            elif line.startswith('phone'):
-                ph = {}
-                ph['phone'] = parts[0].split(': ')[1]
-                ph['duration'] = float(parts[1].split(': ')[1])
-                words[-1]['phones'].append(ph)
+            cmd = [
+                EXECUTABLE_PATH,
+                    self.nnet_dir,
+                    self.hclg_path,
+                    chunkFile.name,
+                    resultFile.name
+            ];
 
-        self._reset()
-        return words
+            subprocess.run(cmd, check=True);
+
+            self._words = [];
+            resultFile.seek(0, 0);
+            while True:
+                line = resultFile.readline().decode()
+                if line.startswith("done"):
+                    break
+                parts = line.split(' / ')
+                if line.startswith('word'):
+                    wd = {}
+                    wd['word'] = parts[0].split(': ')[1]
+                    wd['start'] = float(parts[1].split(': ')[1])
+                    wd['duration'] = float(parts[2].split(': ')[1])
+                    wd['phones'] = []
+                    self._words.append(wd)
+                elif line.startswith('phone'):
+                    ph = {}
+                    ph['phone'] = parts[0].split(': ')[1]
+                    ph['duration'] = float(parts[1].split(': ')[1])
+                    self._words[-1]['phones'].append(ph)
+        
+        return True;
+
+
+    def get_final(self):        
+        return self._words;
 
     def _reset(self):
-        self._cmd("reset")
+        pass;
 
     def stop(self):
-        if not self.finished:
-            self.finished = True
-            self._cmd("stop")
-            # read everything from stdout before waiting for the child process
-            # to terminate, just in case the child process was waiting for the
-            # buffer to have enough space to write stuff. Otherwise we might
-            # deadlock ourselves
-            while(True):
-                chunk = self._p.stdout.read(4096);
-                if(len(chunk) <= 0):
-                    break;
-            # in case the above is not enough, we wait for 10 seconds, ask
-            # nicely and then, if it still has not finished, we kill it
-            # kill the process
-            try:
-                self._p.wait(timeout=10);
-            except:
-                self._p.terminate();
-                try:
-                    self._p.wait(timeout=10);
-                except:
-                    self._p.kill();
-            self._p.stdin.close()
-            self._p.stdout.close()            
+        pass;
 
     def __del__(self):
-        self.stop()
+        pass;
 
 if __name__=='__main__':
     import numm3
