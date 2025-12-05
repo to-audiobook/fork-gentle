@@ -203,14 +203,14 @@ int main(int argc, char *argv[]) {
     char cmd[1024] = {};
 
     // open the input file
-    inFile = fopen(in_data_path, "rb");
+    FILE* inFile = fopen(in_data_path, "rb");
     if(inFile == NULL)
     {
       fprintf(stderr, "Unable to open input file \"%s\"\n", in_data_path);
       return EXIT_FAILURE;
     }
 
-    inFileGuard = File(inFile);
+    File inFileGuard = File(inFile);
 
     // Get chunk length from python
     int chunk_len;      
@@ -270,7 +270,7 @@ int main(int argc, char *argv[]) {
       return EXIT_FAILURE;
     }
 
-    outFileGuard = File(outFile);
+    File outFileGuard = File(outFile);
 
     for (int i = 0; i < words.size(); i++) {
       if(words[i] == 0) {
