@@ -109,7 +109,26 @@ void usage() {
   fprintf(stderr, "usage: k3 [nnet_dir hclg_path in_data_path out_data_path]\n");
 }
 
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <unistd.h>
+#endif
+static uint64_t ProcessID()
+{
+    #ifdef _WIN32
+    DWORD pid = GetCurrentProcessId();
+    #else
+    pid_t pid = getpid();
+    #endif
+
+    return static_cast<uint64_t>(pid);
+}
+
 int main(int argc, char *argv[]) {
+    
+    fprintf(stderr, "%08X k3 started\n", ProcessID());
+
     using namespace kaldi;
     using namespace fst;
 
@@ -127,6 +146,7 @@ int main(int argc, char *argv[]) {
       fst_rxfilename = argv[2];
       in_data_path = argv[3];
       out_data_path = argv[4];
+      fprintf(stderr, "%08X k3 in_data_path=\"%s\" out_data_path=\"%s\"\n", ProcessID(), in_data_path, out_data_path);
     }
     else if(argc != 1) {
       usage();
@@ -203,6 +223,7 @@ int main(int argc, char *argv[]) {
     char cmd[1024] = {};
 
     // open the input file
+    fprintf(stderr, "%08X k3 fopen(\"%s\")\n", ProcessID(), in_data_path);
     FILE* inFile = fopen(in_data_path, "rb");
     if(inFile == NULL)
     {
@@ -213,13 +234,15 @@ int main(int argc, char *argv[]) {
     File inFileGuard = File(inFile);
 
     // Get chunk length from python
-    int chunk_len;      
+    int chunk_len;
+    fprintf(stderr, "%08X k3 fgets(cmd, sizeof(cmd), inFile)\n", ProcessID());
     fgets(cmd, sizeof(cmd), inFile);
     sscanf(cmd, "%d\n", &chunk_len);
 
     int16_t audio_chunk[chunk_len];
     Vector<BaseFloat> wave_part = Vector<BaseFloat>(chunk_len);
 
+    fprintf(stderr, "%08X k3 fread(&audio_chunk, 2, chunk_len=%i, inFile);\n", ProcessID(), chunk_len);
     fread(&audio_chunk, 2, chunk_len, inFile);
 
     // We need to copy this into the `wave_part' Vector<BaseFloat> thing.
@@ -263,6 +286,7 @@ int main(int argc, char *argv[]) {
     CompactLatticeToWordProns(trans_model, aligned_clat, &words, &times,
                               &lengths, &prons, &phone_lengths);
 
+    fprintf(stderr, "%08X k3 fopen(\"%s\");\n", ProcessID(), out_data_path);
     FILE* outFile = fopen(out_data_path, "wb");
     if(inFile == NULL)
     {
@@ -271,6 +295,8 @@ int main(int argc, char *argv[]) {
     }
 
     File outFileGuard = File(outFile);
+
+    fprintf(stderr, "%08X k3 for (int i = 0; i < words.size()=%zu; i++);\n", ProcessID(), words.size());
 
     for (int i = 0; i < words.size(); i++) {
       if(words[i] == 0) {
@@ -290,6 +316,8 @@ int main(int argc, char *argv[]) {
     }
 
     fprintf(outFile, "done with words\n");
+
+    fprintf(stderr, "%08X k3 done!\n", ProcessID());
     
     return EXIT_SUCCESS;
 }
