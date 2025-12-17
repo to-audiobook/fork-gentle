@@ -30,9 +30,9 @@ class Kaldi:
 
         # create temporary files we will use to send data and read the results
         # from the k3 application
-        with tempfile.NamedTemporaryFile(mode='w', delete=True) as chunkFile, \
-            tempfile.NamedTemporaryFile(mode='rw', delete=True) as resultFile:
-            chunkFile.write(str(cnt));
+        with tempfile.NamedTemporaryFile(mode='w+b', delete=True) as chunkFile, \
+            tempfile.NamedTemporaryFile(mode='w+b', delete=True) as resultFile:
+            chunkFile.write(str(cnt).encode('utf-8'));
             chunkFile.write(buf);
             chunkFile.flush();
 
@@ -44,10 +44,10 @@ class Kaldi:
                     resultFile.name
             ];
 
-            subprocess.run(cmd, check=True);
+            subprocess.run(cmd, check=True, stderr=subprocess.DEVNULL);
 
             self._words = [];
-            resultFile.seek(0, 0);
+            resultFile.seek(0, os.SEEK_SET);
             while True:
                 line = resultFile.readline().decode()
                 if line.startswith("done"):
